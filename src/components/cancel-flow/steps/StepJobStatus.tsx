@@ -80,7 +80,7 @@ export default function StepJobStatus({ onNext }: StepProps) {
               {/* CTA 1 */}
               <button
                 type="button"
-                onClick={() => onNext?.({ foundJob: 'yes' })}
+                onClick={() => onNext?.({ found_job: true })}
                 className="
                   w-full rounded-[12px] border border-[#e6e6e6] bg-white
                   px-6 py-4 text-[16px] font-semibold text-[#62605c]
@@ -90,13 +90,13 @@ export default function StepJobStatus({ onNext }: StepProps) {
                 "
                 data-testid="btn-found-job"
               >
-                Yes, I’ve found a job
+                Yes, I&apos;ve found a job
               </button>
 
               {/* CTA 2 */}
               <button
                 type="button"
-                onClick={() => onNext?.({ foundJob: 'no' })}
+                onClick={() => onNext?.({ found_job: false })}
                 className="
                   w-full rounded-[12px] border border-[#e6e6e6] bg-white
                   px-6 py-4 text-[16px] font-semibold text-[#62605c]

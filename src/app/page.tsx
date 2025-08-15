@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import CancelFlowModal from '../components/cancel-flow/CancelFlowModal';
 
 // Mock user data for UI display
@@ -26,9 +26,15 @@ export default function ProfilePage() {
   const [loading] = useState(false);
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  
-  // New state for settings toggle
   const [showAdvancedSettings, setShowAdvancedSettings] = useState(false);
+  useEffect(() => {
+    if (!document.cookie.includes('csrf_token=')) {
+      const buf = new Uint32Array(1);
+      crypto.getRandomValues(buf);
+      const token = buf[0].toString(16);
+      document.cookie = `csrf_token=${token};path=/;SameSite=Lax`;
+    }
+  }, []);
 
   const handleSignOut = async () => {
     setIsSigningOut(true);
