@@ -251,7 +251,7 @@ export default function ProfilePage() {
                     </button>
                     <button
                       onClick={() => {
-                        console.log('Cancel button clicked - no action');
+                        setIsModalOpen(true);
                       }}
                       className="inline-flex items-center justify-center w-full px-4 py-3 bg-white border border-red-200 text-red-600 rounded-lg hover:bg-red-50 hover:border-red-300 transition-all duration-200 shadow-sm group"
                     >
@@ -260,7 +260,6 @@ export default function ProfilePage() {
                       </svg>
                       <span className="text-sm font-medium">Cancel Migrate Mate</span>
                     </button>
-                    <CancelFlowModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}/>
                   </div>
                 </div>
               </div>
@@ -268,6 +267,7 @@ export default function ProfilePage() {
           </div>
         </div>
       </div>
+      <CancelFlowModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}/>
     </div>
   );
 }
