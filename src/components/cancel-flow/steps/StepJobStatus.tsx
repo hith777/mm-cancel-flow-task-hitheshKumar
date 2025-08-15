@@ -49,7 +49,7 @@ export default function StepJobStatus({ onNext }: StepProps) {
               "
               data-testid="btn-found-job"
             >
-              Yes, I’ve found a job
+              Yes, I&apos;ve found a job
             </button>
 
             <button
@@ -63,7 +63,7 @@ export default function StepJobStatus({ onNext }: StepProps) {
               "
               data-testid="btn-still-looking"
             >
-              Not yet — I’m still looking
+              Not yet — I&apos;m still looking
             </button>
           </div>
         </div>
@@ -71,7 +71,7 @@ export default function StepJobStatus({ onNext }: StepProps) {
         {/* RIGHT: image (desktop) */}
         <div className="relative hidden overflow-hidden rounded-xl md:block">
           <Image
-            src="/images/main-hero.jpg"     // put your provided main image here
+            src="/profile.jpg"     // put your provided main image here
             alt="City skyline"
             fill
             sizes="(min-width: 768px) 420px, 100vw"
@@ -83,7 +83,7 @@ export default function StepJobStatus({ onNext }: StepProps) {
         {/* Mobile image: short banner so content stays near top */}
         <div className="relative block overflow-hidden rounded-xl md:hidden">
           <Image
-            src="/images/main-hero.jpg"
+            src="/profile.jpg"
             alt="City skyline"
             width={1200}
             height={800}

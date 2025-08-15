@@ -1,10 +1,10 @@
 'use client';
 
-import { useState } from 'react';
-import type { FlowState, Step } from './types';
+import { useEffect, useRef, useState } from 'react';
 import StepJobStatus from './steps/StepJobStatus';
 
-// A lightweight modal + step router. Pure placeholders now.
+type Step = 'job_status' | 'completion';
+
 export default function CancelFlowModal({
   isOpen,
   onClose,
@@ -12,94 +12,106 @@ export default function CancelFlowModal({
   isOpen: boolean;
   onClose: () => void;
 }) {
-  // Initialize the walking skeleton state.
-  const [state, setState] = useState<FlowState>({
-    step: 'job_status',        // start at first screen
-    answers: {},               // we collect answers here
-    downsellVariant: null,     // we'll assign A/B later
-  });
+  const [step, setStep] = useState<Step>('job_status');
+  const [answers, setAnswers] = useState<Record<string, unknown>>({});
 
-  // Called by each step when the user clicks "Continue".
-  function next(payload?: Record<string, unknown>) {
-    // Merge new answers into the running object.
-    setState(prev => {
-      const answers = { ...prev.answers, ...(payload || {}) };
+  // ref to the modal "card" to manage focus trap
+  const cardRef = useRef<HTMLDivElement | null>(null);
 
-      // Decide the next step based on what we know.
-      let nextStep: Step = prev.step;
+  // Focus trap + ESC to close + restore focus
+  useEffect(() => {
+    if (!isOpen) return;
 
-      if (prev.step === 'job_status') {
-        const found = (payload?.foundJob as 'yes' | 'no') || 'no';
+    const prev = document.activeElement as HTMLElement | null;
 
-        // For now (skeleton), route simply:
-        // yes  -> found_feedback
-        // no   -> reasons  (we'll insert the downsell step later when we add A/B)
-        nextStep = found === 'yes' ? 'found_feedback' : 'reasons';
-      } else if (prev.step === 'found_feedback' || prev.step === 'reasons') {
-        nextStep = 'completion';
-      } else if (prev.step === 'downsell') {
-        // placeholder logic; real accept/decline will come later
-        nextStep = 'reasons';
+    // focus the first focusable element in the card when it opens
+    const focusFirst = () => {
+      const root = cardRef.current;
+      if (!root) return;
+      const items = Array.from(
+        root.querySelectorAll<HTMLElement>(
+          'a[href], button, textarea, input, select, [tabindex]:not([tabindex="-1"])'
+        )
+      ).filter(el => !el.hasAttribute('disabled') && !el.getAttribute('aria-hidden'));
+      (items[0] ?? root).focus();
+    };
+
+    focusFirst();
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      const root = cardRef.current;
+      if (!root) return;
+
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onClose();
+        return;
       }
 
-      return { ...prev, step: nextStep, answers };
-    });
-  }
+      if (e.key !== 'Tab') return;
 
-  // Optional "Back" handler (we’ll refine per step later).
-  function back() {
-    setState(prev => {
-      // Simple demo: go back to job_status from any step.
-      // We'll make this smarter once each step is in place.
-      return { ...prev, step: 'job_status' };
-    });
-  }
+      const items = Array.from(
+        root.querySelectorAll<HTMLElement>(
+          'a[href], button, textarea, input, select, [tabindex]:not([tabindex="-1"])'
+        )
+      ).filter(el => !el.hasAttribute('disabled') && !el.getAttribute('aria-hidden'));
+      if (items.length === 0) return;
+
+      const first = items[0];
+      const last = items[items.length - 1];
+
+      // cycle focus inside the modal
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('keydown', onKeyDown);
+      prev?.focus(); // return focus to the previously focused element
+    };
+  }, [isOpen, onClose]);
 
   if (!isOpen) return null;
 
+  const next = (data?: Record<string, unknown>) => {
+    setAnswers(a => ({ ...a, ...(data || {}) }));
+    setStep('completion');
+  };
+
   return (
-    // Dark backdrop
-    <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-3">
-      {/* Modal card */}
-      <div className="relative w-full max-w-3xl">
-        {/* Render current step */}
-        {state.step === 'job_status' && <StepJobStatus onNext={next} />}
+    // Backdrop
+    <div
+      className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-3"
+      role="presentation"
+      aria-hidden={false}
+    >
+      {/* Modal "card" */}
+      <div
+        ref={cardRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="modal-title"
+        tabIndex={-1} // make the card itself focusable as a fallback
+        className="relative w-full max-w-[1000px]" // match Figma width
+      >
+        {/* Render the current step */}
+        {step === 'job_status' && <StepJobStatus onNext={next} />}
 
-        {state.step === 'found_feedback' && (
-          <div className="rounded-2xl bg-white p-6 shadow ring-1 ring-black/5">
-            <p className="text-sm text-gray-600">
-              Placeholder for “Found a job → feedback” screen.
-            </p>
-            <div className="mt-4 flex gap-2">
-              <button onClick={back} className="rounded-lg border px-4 py-2 text-sm">Back</button>
-              <button onClick={() => next({ foundJob_feedback: '...' })} className="rounded-lg border px-4 py-2 text-sm">Continue</button>
-            </div>
+        {step === 'completion' && (
+          <div className="rounded-[18px] bg-white p-6 shadow-xl ring-1 ring-black/5">
+            <h3 id="modal-title" className="text-lg font-semibold">Completion (placeholder)</h3>
+            <pre className="mt-2 text-xs bg-gray-50 p-2 rounded">{JSON.stringify(answers, null, 2)}</pre>
+            <button onClick={onClose} className="mt-4 rounded border px-3 py-1.5 text-sm">Close</button>
           </div>
         )}
 
-        {state.step === 'reasons' && (
-          <div className="rounded-2xl bg-white p-6 shadow ring-1 ring-black/5">
-            <p className="text-sm text-gray-600">
-              Placeholder for “Reasons” screen (still looking).
-            </p>
-            <div className="mt-4 flex gap-2">
-              <button onClick={back} className="rounded-lg border px-4 py-2 text-sm">Back</button>
-              <button onClick={() => next({ reason_code: 'placeholder' })} className="rounded-lg border px-4 py-2 text-sm">Continue</button>
-            </div>
-          </div>
-        )}
-
-        {state.step === 'completion' && (
-          <div className="rounded-2xl bg-white p-6 shadow ring-1 ring-black/5">
-            <h3 className="text-lg font-semibold">Completion (placeholder)</h3>
-            <p className="mt-2 text-sm text-gray-600">We’ll implement real copy + DB commit later.</p>
-            <div className="mt-4">
-              <button onClick={onClose} className="rounded-lg border px-4 py-2 text-sm">Close</button>
-            </div>
-          </div>
-        )}
-
-        {/* Close button in top-right corner of the card */}
+        {/* Close button (kept for mouse users) */}
         <button
           onClick={onClose}
           className="absolute -top-3 right-0 rounded-md bg-white/80 p-2 text-sm shadow ring-1 ring-black/5"
