@@ -19,7 +19,7 @@ export default function StepJobStatus({ onNext }: StepProps) {
           onClick={() => onNext({ foundJob: 'yes' })}
           className="rounded-lg border px-4 py-2 text-sm"
         >
-          Yes, I’ve found a job
+          Yes, I&apos;ve found a job
         </button>
 
         <button
@@ -27,7 +27,7 @@ export default function StepJobStatus({ onNext }: StepProps) {
           onClick={() => onNext({ foundJob: 'no' })}
           className="rounded-lg border px-4 py-2 text-sm"
         >
-          Not yet — I’m still looking
+          Not yet — I&apos;m still looking
         </button>
       </div>
     </section>
