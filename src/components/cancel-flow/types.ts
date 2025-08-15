@@ -12,10 +12,18 @@ export interface StepProps {
   value?: unknown;
   onNext: (payload?: Record<string, unknown>) => void;
   onBack?: () => void;
+  setError?: (msg: string | null) => void;
 }
 
 export interface FlowState {
-  step: Step;                              // which screen we're on
-  answers: Record<string, unknown>;        // everything the user has answered so far
-  downsellVariant: 'A' | 'B' | null;       // A/B value (we'll fill this later)
+  step: Step;
+  downsellVariant: 'A' | 'B' | null;
+  answers: {
+    found_job?: boolean;
+    found_via_mm?: boolean;
+    found_job_feedback?: string;
+    reason_code?: string;
+    follow_up?: string;
+    accepted_downsell?: boolean;
+  };
 }
