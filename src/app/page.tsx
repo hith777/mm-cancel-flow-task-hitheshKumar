@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import CancelFlowModal from '../components/cancel-flow/CancelFlowModal';
 
 // Mock user data for UI display
 const mockUser = {
@@ -24,6 +25,7 @@ const mockSubscriptionData = {
 export default function ProfilePage() {
   const [loading] = useState(false);
   const [isSigningOut, setIsSigningOut] = useState(false);
+  const [isModalOpen, setIsModalOpen] = useState(false);
   
   // New state for settings toggle
   const [showAdvancedSettings, setShowAdvancedSettings] = useState(false);
@@ -258,6 +260,7 @@ export default function ProfilePage() {
                       </svg>
                       <span className="text-sm font-medium">Cancel Migrate Mate</span>
                     </button>
+                    <CancelFlowModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}/>
                   </div>
                 </div>
               </div>
