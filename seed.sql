@@ -21,15 +21,28 @@ CREATE TABLE IF NOT EXISTS subscriptions (
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Create cancellations table
-CREATE TABLE IF NOT EXISTS cancellations (
+CREATE TABLE cancellations (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
-  subscription_id UUID REFERENCES subscriptions(id) ON DELETE CASCADE,
-  downsell_variant TEXT NOT NULL CHECK (downsell_variant IN ('A', 'B')),
-  reason TEXT,
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE NOT NULL,
+  subscription_id UUID REFERENCES subscriptions(id) ON DELETE CASCADE NOT NULL,
+  -- A: control (skip downsell), B: downsell ($10 off)
+  downsell_variant TEXT NOT NULL CHECK (downsell_variant IN ('A','B')),
+  -- user selected “main reason” (radio on “still looking” path)
+  reason TEXT,                                      
+  -- free text feedback (min 25 chars in UI when required)
+  feedback_text TEXT,
+  -- “job found” block
+  found_job_with_mm BOOLEAN,                        
+  roles_applied_mm INTEGER,                         -- 0, 1-5, 6-20, 20+
+  companies_emailed INTEGER,                        -- 0, 1-5, 6-20, 20+
+  companies_interviewed INTEGER,                    -- 0, 1-2, 3-5, 5+
+  -- visa block
+  company_provides_lawyer BOOLEAN,
+  visa_type TEXT,
+  -- downsell
   accepted_downsell BOOLEAN DEFAULT FALSE,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
 -- Enable Row Level Security
@@ -74,36 +87,13 @@ INSERT INTO subscriptions (user_id, monthly_price, status) VALUES
   ('550e8400-e29b-41d4-a716-446655440003', 2500, 'active')  -- $25.00
 ON CONFLICT DO NOTHING;
 
--- === Add columns we need for the progressive flow (safe to re-run) ===
--- Extend cancellations with structured fields + flexible JSON for extras
-ALTER TABLE cancellations
-  ADD COLUMN job_found BOOLEAN,
-  ADD COLUMN via_mm BOOLEAN,
-  ADD COLUMN roles_applied INTEGER,
-  ADD COLUMN companies_emailed INTEGER,
-  ADD COLUMN companies_interviewed INTEGER,
-  ADD COLUMN feedback TEXT,
-  ADD COLUMN visa_lawyer BOOLEAN,
-  ADD COLUMN visa_type TEXT,
-  ADD COLUMN reason_details JSONB DEFAULT '{}'::jsonb;
+-- RLS (same style as your existing policies)
+CREATE POLICY "Users can insert own cancellations" ON cancellations
+  FOR INSERT WITH CHECK (auth.uid() = user_id);
 
--- Permit users to update their own cancellation as they progress
-CREATE POLICY "Users can update own cancellations"
-ON cancellations
-FOR UPDATE
-USING (auth.uid() = user_id)
-WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can view own cancellations" ON cancellations
+  FOR SELECT USING (auth.uid() = user_id);
 
--- Keep only one 'draft' cancellation row per (user, subscription)
-CREATE UNIQUE INDEX IF NOT EXISTS uniq_cxl_draft
-  ON cancellations (user_id, subscription_id)
-  WHERE status = 'draft';
+CREATE POLICY "Users can update own cancellations" ON cancellations
+  FOR UPDATE USING (auth.uid() = user_id);
 
--- Optional: a single mock user + sub so the UI has something to show
-INSERT INTO users (id, email)
-VALUES ('11111111-1111-1111-1111-111111111111', 'user@example.com')
-ON CONFLICT (id) DO NOTHING;
-
-INSERT INTO subscriptions (id, user_id, monthly_price, status)
-VALUES ('22222222-2222-2222-2222-222222222222', '11111111-1111-1111-1111-111111111111', 2500, 'active')
-ON CONFLICT (id) DO NOTHING;
