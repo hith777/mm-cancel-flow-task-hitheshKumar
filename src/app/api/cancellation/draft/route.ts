@@ -21,12 +21,11 @@ type Cancellation = {
   accepted_downsell: boolean | null;
   created_at: string;
   updated_at: string;
-  // legacy column present in your base schema
-  reason: string | null;
+  reason: string | null; // legacy column OK to ignore
 };
 
 const Draft = z.object({
-  init: z.boolean().optional(),
+  init: z.boolean().optional(),                 // client-only flag
   found_job: z.boolean().optional(),
   found_via_mm: z.boolean().optional(),
   found_job_feedback: z.string().trim().max(2000).optional(),
@@ -36,6 +35,7 @@ const Draft = z.object({
 });
 
 type DraftPayload = z.infer<typeof Draft>;
+type PersistablePayload = Omit<DraftPayload, 'init'>;
 
 type FixedFields = {
   user_id: string;
@@ -50,7 +50,9 @@ export async function POST(req: NextRequest) {
     assertCsrf(req);
 
     const bodyStr = await req.text();
-    const payload: DraftPayload = bodyStr ? Draft.parse(JSON.parse(bodyStr)) : {};
+    const payload: PersistablePayload = Draft.omit({ init: true }).parse(
+      bodyStr ? JSON.parse(bodyStr) : {}
+    );
 
     // Read current draft (if any)
     const existingRes = await supabaseAdmin
@@ -60,7 +62,6 @@ export async function POST(req: NextRequest) {
       .eq('subscription_id', SUB)
       .eq('status', 'draft')
       .maybeSingle();
-
     if (existingRes.error) throw existingRes.error;
     const existing = (existingRes.data as Cancellation | null) ?? null;
 
@@ -68,8 +69,8 @@ export async function POST(req: NextRequest) {
     const variant: 'A' | 'B' =
       existing?.downsell_variant ?? (randomInt(0, 2) === 0 ? 'A' : 'B');
 
-    const rowData: DraftPayload & FixedFields = {
-      ...payload,
+    const rowData: PersistablePayload & FixedFields = {
+      ...payload,                                // ← no "init" here anymore
       user_id: USER,
       subscription_id: SUB,
       downsell_variant: variant,
@@ -101,6 +102,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(row);
   } catch (e) {
     const status = e instanceof CsrfError ? e.status : 400;
+    // Helpful during dev: surface actual message
     const message = e instanceof Error ? e.message : 'Bad request';
     return NextResponse.json({ error: message }, { status });
   }
