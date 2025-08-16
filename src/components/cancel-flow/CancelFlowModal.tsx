@@ -1,65 +1,11 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import type { FlowState, Step, Answers } from './types';
 import StepJobStatus from './steps/StepJobStatus';
 import StepFoundJobFeedback from './steps/StepFoundJobFeedback';
 import StepDownsell from './steps/StepDownsell';
 import StepReasons from './steps/StepReasons';
-
-// ---- API types (client-side) ----
-type DraftBody = Partial<Answers> & { init?: boolean };
-type DraftResponse = {
-  id: string;
-  user_id: string;
-  subscription_id: string;
-  downsell_variant: 'A' | 'B';
-  status: 'draft' | 'committed';
-  found_job?: boolean | null;
-  found_via_mm?: boolean | null;
-  found_job_feedback?: string | null;
-  reason_code?: string | null;
-  follow_up?: string | null;
-  accepted_downsell?: boolean | null;
-  created_at?: string;
-  updated_at?: string;
-};
-
-type CommitResponse = { ok: boolean; accepted_downsell: boolean };
-
-function getCsrfFromCookie(): string {
-  return (
-    document.cookie
-      .split('; ')
-      .find((c) => c.startsWith('csrf_token='))?.split('=')[1] ?? ''
-  );
-}
-
-async function draftSave(payload: DraftBody): Promise<DraftResponse> {
-  const res = await fetch('/api/cancellation/draft', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-csrf-token': getCsrfFromCookie() },
-    body: JSON.stringify(payload),
-  });
-  if (!res.ok) {
-    const txt = await res.text();
-    throw new Error(txt);
-  }
-  return (await res.json()) as DraftResponse;
-}
-
-async function commitFinalize(): Promise<CommitResponse> {
-  const res = await fetch('/api/cancellation/commit', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-csrf-token': getCsrfFromCookie() },
-    body: JSON.stringify({ confirm: true }),
-  });
-  if (!res.ok) {
-    const txt = await res.text();
-    throw new Error(txt);
-  }
-  return (await res.json()) as CommitResponse;
-}
+import { Answers, Step } from './types';
 
 export default function CancelFlowModal({
   isOpen,
@@ -68,30 +14,12 @@ export default function CancelFlowModal({
   isOpen: boolean;
   onClose: () => void;
 }) {
-  const [state, setState] = useState<FlowState>({
-    step: 'job_status',
-    downsellVariant: null,
-    answers: {},
-  });
+  const [step, setStep] = useState<Step>('job_status');
+  const [answers, setAnswers] = useState<Answers>({});
   const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
 
+  // Focus trap
   const cardRef = useRef<HTMLDivElement | null>(null);
-
-  // Create draft & assign A/B on open
-  useEffect(() => {
-    if (!isOpen) return;
-    setError(null);
-    setLoading(true);
-    draftSave({ init: true })
-      .then((row) =>
-        setState((s) => ({ ...s, downsellVariant: row.downsell_variant })),
-      )
-      .catch(() => setError('Could not initialize cancellation.'))
-      .finally(() => setLoading(false));
-  }, [isOpen]);
-
-  // Focus trap + ESC close
   useEffect(() => {
     if (!isOpen) return;
     const prev = document.activeElement as HTMLElement | null;
@@ -107,9 +35,7 @@ export default function CancelFlowModal({
         root.querySelectorAll<HTMLElement>(
           'a[href], button, textarea, input, select, [tabindex]:not([tabindex="-1"])',
         ),
-      ).filter(
-        (el) => !el.hasAttribute('disabled') && !el.getAttribute('aria-hidden'),
-      );
+      ).filter((el) => !el.hasAttribute('disabled') && !el.getAttribute('aria-hidden'));
       if (!items.length) return;
       const first = items[0];
       const last = items[items.length - 1];
@@ -130,144 +56,127 @@ export default function CancelFlowModal({
 
   if (!isOpen) return null;
 
-  async function goNext(payload?: Partial<Answers>): Promise<void> {
-    try {
-      setError(null);
-      setLoading(true);
+  // Navigation helpers
+  function goNext(payload?: Partial<Answers>) {
+    if (payload) setAnswers((prev) => ({ ...prev, ...payload }));
 
-      // Save answers progressively
-      if (payload && Object.keys(payload).length > 0) {
-        await draftSave(payload);
-        setState((s) => ({ ...s, answers: { ...s.answers, ...payload } }));
+    setStep((prev) => {
+      if (prev === 'job_status') {
+        return payload?.found_job ? 'found_feedback' : 'reasons'; // downsell omitted for now
       }
-
-      // Decide next step
-      setState((prev) => {
-        let next: Step = prev.step;
-
-        if (prev.step === 'job_status') {
-          next = payload?.found_job
-            ? 'found_feedback'
-            : prev.downsellVariant === 'B'
-            ? 'downsell'
-            : 'reasons';
-        } else if (prev.step === 'downsell') {
-          next = payload?.accepted_downsell ? 'completion' : 'reasons';
-        } else if (prev.step === 'found_feedback' || prev.step === 'reasons') {
-          next = 'completion';
-        }
-
-        return { ...prev, step: next };
-      });
-    } catch {
-      setError('Failed to save. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  function goBack(): void {
-    setError(null);
-    setState((prev) => {
-      if (
-        prev.step === 'found_feedback' ||
-        prev.step === 'reasons' ||
-        prev.step === 'downsell'
-      ) {
-        return { ...prev, step: 'job_status' };
-      }
+      if (prev === 'found_feedback' || prev === 'reasons') return 'completion';
+      if (prev === 'downsell') return payload?.accepted_downsell ? 'completion' : 'reasons';
       return prev;
     });
   }
 
-  async function finish(): Promise<void> {
-    try {
-      setLoading(true);
-      await commitFinalize();
-      onClose();
-    } catch {
-      setError('Could not finalize cancellation.');
-    } finally {
-      setLoading(false);
-    }
+  function goBack() {
+    setError(null);
+    setStep('job_status');
   }
 
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-3">
+    <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-3 font-dm">
+      {/* Card */}
       <div
         ref={cardRef}
         role="dialog"
         aria-modal="true"
-        tabIndex={-1}
-        className="relative w-full max-w-[1000px]"
+        aria-labelledby="cxl-title"
+        className="w-full max-w-[1000px] rounded-[20px] bg-white shadow-[0_0_20px_rgba(0,0,0,0.25)]"
       >
-        {error && (
-          <div className="mb-2 rounded-md bg-red-50 p-3 text-sm text-red-700 ring-1 ring-red-200">
-            {error}
+        {/* Header bar (1000×60, 18px Y padding, bottom divider) */}
+        <div className="relative flex h-[60px] items-center justify-center px-0 py-[18px] border-b border-warm-300">
+          <div
+            id="cxl-title"
+            className="text-[16px] font-semibold text-warm-800"
+          >
+            Subscription Cancellation
           </div>
-        )}
 
-        {state.step === 'job_status' && (
-          <StepJobStatus onNext={goNext} setError={setError} />
-        )}
-        {state.step === 'found_feedback' && (
-          <StepFoundJobFeedback
-            value={{
-              found_via_mm: state.answers.found_via_mm,
-              found_job_feedback: state.answers.found_job_feedback,
-            }}
-            onNext={goNext}
-            onBack={goBack}
-            setError={setError}
-          />
-        )}
-        {state.step === 'downsell' && (
-          <StepDownsell onNext={goNext} onBack={goBack} />
-        )}
-        {state.step === 'reasons' && (
-          <StepReasons
-            value={{
-              reason_code: state.answers.reason_code,
-              follow_up: state.answers.follow_up,
-            }}
-            onNext={goNext}
-            onBack={goBack}
-            setError={setError}
-          />
-        )}
+          {/* Close button 24×24 with 11.9×11.9 “X” */}
+          <button
+            onClick={onClose}
+            aria-label="Close"
+            className="absolute right-3 inline-grid size-6 place-items-center rounded-md ring-1 ring-warm-300 hover:bg-neutral-50"
+          >
+            <svg width="12" height="12" viewBox="0 0 20 20" aria-hidden="true">
+              <path
+                d="M4.5 4.5 L15.5 15.5 M15.5 4.5 L4.5 15.5"
+                stroke="#62605C"
+                strokeWidth="2"
+                strokeLinecap="round"
+              />
+            </svg>
+          </button>
+        </div>
 
-        {state.step === 'completion' && (
-          <div className="rounded-2xl bg-white p-6 shadow ring-1 ring-black/5">
-            <div className="mb-2 text-xs text-gray-500">All done</div>
-            {state.answers.accepted_downsell ? (
-              <h3 className="text-lg font-semibold">
-                Discount applied. Thanks for staying! 🎉
-              </h3>
-            ) : (
-              <h3 className="text-lg font-semibold">
-                Your subscription will be cancelled at period end.
-              </h3>
-            )}
-            <div className="mt-4">
-              <button
-                onClick={finish}
-                className="rounded border px-4 py-2 text-sm"
-                disabled={loading}
-              >
-                Close
-              </button>
+        {/* Body */}
+        <div className="p-0">
+          {error && (
+            <div className="mx-5 my-3 rounded-md bg-red-50 p-3 text-sm text-red-700 ring-1 ring-red-200">
+              {error}
             </div>
-          </div>
-        )}
+          )}
 
-        <button
-          onClick={onClose}
-          className="absolute -top-3 right-0 rounded-md bg-white/80 p-2 text-sm shadow ring-1 ring-black/5"
-          aria-label="Close"
-        >
-          ✕
-        </button>
+          {step === 'job_status' && (
+            <StepJobStatus onNext={goNext} setError={setError} />
+          )}
+
+          {step === 'found_feedback' && (
+            <StepFoundJobFeedback
+              value={{
+                found_via_mm: answers.found_via_mm,
+                found_job_feedback: answers.found_job_feedback,
+              }}
+              onNext={goNext}
+              onBack={goBack}
+              setError={setError}
+            />
+          )}
+
+          {step === 'downsell' && (
+            <StepDownsell onNext={goNext} onBack={goBack} />
+          )}
+
+          {step === 'reasons' && (
+            <StepReasons
+              value={{
+                reason_code: answers.reason_code,
+                follow_up: answers.follow_up,
+              }}
+              onNext={goNext}
+              onBack={goBack}
+              setError={setError}
+            />
+          )}
+
+          {step === 'completion' && (
+            <div className="p-6">
+              <h3 className="text-lg font-semibold text-warm-800">
+                Thanks — we’ve recorded your response.
+              </h3>
+              <div className="mt-4">
+                <button
+                  onClick={onClose}
+                  className="rounded-md border border-warm-300 px-4 py-2 text-sm text-warm-700 hover:bg-neutral-50"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
+
+      {/* MOBILE bottom-sheet overlay feel */}
+      <style jsx global>{`
+        @media (max-width: 767px) {
+          [role='dialog'] {
+            width: 320px;
+          }
+        }
+      `}</style>
     </div>
   );
 }

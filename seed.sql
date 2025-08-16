@@ -75,14 +75,24 @@ INSERT INTO subscriptions (user_id, monthly_price, status) VALUES
 ON CONFLICT DO NOTHING;
 
 -- === Add columns we need for the progressive flow (safe to re-run) ===
+-- Extend cancellations with structured fields + flexible JSON for extras
 ALTER TABLE cancellations
-  ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft','committed')),
-  ADD COLUMN IF NOT EXISTS found_job BOOLEAN,
-  ADD COLUMN IF NOT EXISTS found_via_mm BOOLEAN,
-  ADD COLUMN IF NOT EXISTS found_job_feedback TEXT,
-  ADD COLUMN IF NOT EXISTS reason_code TEXT,
-  ADD COLUMN IF NOT EXISTS follow_up TEXT,
-  ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
+  ADD COLUMN job_found BOOLEAN,
+  ADD COLUMN via_mm BOOLEAN,
+  ADD COLUMN roles_applied INTEGER,
+  ADD COLUMN companies_emailed INTEGER,
+  ADD COLUMN companies_interviewed INTEGER,
+  ADD COLUMN feedback TEXT,
+  ADD COLUMN visa_lawyer BOOLEAN,
+  ADD COLUMN visa_type TEXT,
+  ADD COLUMN reason_details JSONB DEFAULT '{}'::jsonb;
+
+-- Permit users to update their own cancellation as they progress
+CREATE POLICY "Users can update own cancellations"
+ON cancellations
+FOR UPDATE
+USING (auth.uid() = user_id)
+WITH CHECK (auth.uid() = user_id);
 
 -- Keep only one 'draft' cancellation row per (user, subscription)
 CREATE UNIQUE INDEX IF NOT EXISTS uniq_cxl_draft
