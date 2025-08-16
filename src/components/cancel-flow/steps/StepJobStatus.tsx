@@ -36,7 +36,7 @@ export default function StepJobStatus({ onNext }: StepProps) {
         <div className="block md:hidden">
           <div className="overflow-hidden rounded-2xl bg-white p-1 ring-1 ring-black/10 shadow-[0_25px_60px_-20px_rgba(0,0,0,0.35)]">
             <Image
-              src="/main-hero.jpeg"
+              src="/main-hero.jpg"
               alt="City skyline"
               width={1200}
               height={800}
@@ -106,7 +106,7 @@ export default function StepJobStatus({ onNext }: StepProps) {
                 "
                 data-testid="btn-still-looking"
               >
-                Not yet — I’m still looking
+                Not yet — I&apos;m still looking
               </button>
             </div>
           </div>
